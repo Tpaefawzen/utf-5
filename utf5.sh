@@ -68,7 +68,7 @@ esac
 od -A n -t u1 -v ${1:+"$1"} |
 #
 # convert to code points
-awk -v ERRSTATUS="$ERRSTATUS" -v is_reading=0 '
+awk -v myname="${0##*/}" -v ERRSTATUS="$ERRSTATUS" -v is_reading=0 '
 function getchar(){
 	if( NR == 0 || gc_i > NF ){
 		gc_status = getline;
@@ -81,7 +81,7 @@ function getchar(){
 	return $(gc_i++);
 }
 function error_exit( msg ){
-	print msg | "cat 1>&2";
+	print myname ": " msg | "cat 1>&2";
 	print 1 >> ERRSTATUS;
 	exit( 1 );
 }
