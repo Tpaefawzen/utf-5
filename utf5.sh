@@ -47,14 +47,21 @@ export POSIXLY_CORRECT=1
 ERRSTATUS="$( mktemp )"
 
 ## clearner
-trap "rm -Rf $ERRSTATUS" KILL INT TERM QUIT HUP ALRM
+cleaner(){
+	exit_status=$?
+	trap '' EXIT HUP INT QUIT PIPE ALRM TERM KILL
+	rm -f "$ERRSTATUS"
+	trap - EXIT HUP INT QUIT PIPE ALRM TERM KILL
+	exit "$exit_status"
+}
+trap cleaner EXIT HUP INT QUIT PIPE ALRM TERM KILL
 
 ## helper function
 usage(){
-    cat <<-USAGE 1>&2
+	cat <<-USAGE 1>&2
 	Usage: ${0##*/} [FILE]
 	USAGE
-    exit 1
+	exit 1
 }
 
 ## parse arguments
@@ -65,7 +72,12 @@ esac
 ## main routine
 
 # assuming input is UTF-8, get each byte as unsigned decimal
-od -A n -t u1 -v ${1:+"$1"} |
+(
+	od -A n -t u1 -v ${1:+"$1"} || {
+		printf '%s\n' "${0##*/}: ${1##*/}: Reading error occured (status: $?)" 1>&2
+		echo 1 >> "$ERRSTATUS"
+	}
+) |
 #
 # convert to code points
 awk -v myname="${0##*/}" -v ERRSTATUS="$ERRSTATUS" -v is_reading=0 '
@@ -75,8 +87,8 @@ function getchar(){
 		gc_i = 1;
 	}
 	if( gc_status <= 0 ){
-		if( ! is_reading) exit( 0 );
-		error_exit( "unexpected EOF while reading following byte(s)" );
+		if( ! is_reading ) exit( 0 );
+		error_exit("unexpected EOF while reading following byte(s)");
 	}
 	return $(gc_i++);
 }
@@ -157,7 +169,7 @@ awk '
 		s = q FS s;
 
 		# ABCDEF to 0ABCDE
-		c = int ( c / 16 );
+		c = int( c / 16 );
 	}
 
 	# finally first quintet shall be 1xxxx
@@ -191,4 +203,5 @@ END{
 	}
 }'
 
+# finally
 exit $(head -n 1 "$ERRSTATUS")
