@@ -44,13 +44,16 @@ export POSIXLY_CORRECT=1
 
 ## pipestatus alternative
 ## shall have at least one line of text when error; empty if succesuful exit
-ERRSTATUS="$( mktemp )"
+tmpdir="$(
+	mktemp -d -t "${0##*/}.XXXXXXXXXXXX"
+)"
+ERRSTATUS="$tmpdir/errstatus"
 
 ## clearner
 cleaner(){
 	exit_status=$?
 	trap '' EXIT HUP INT QUIT PIPE ALRM TERM KILL
-	rm -f "$ERRSTATUS"
+	rm -Rf "$tmpdir"
 	trap - EXIT HUP INT QUIT PIPE ALRM TERM KILL
 	exit "$exit_status"
 }
@@ -204,4 +207,7 @@ END{
 }'
 
 # finally
-exit $(head -n 1 "$ERRSTATUS")
+if test -r "$ERRSTATUS"; then
+	exit $( head -n 1 "$ERRSTATUS" )
+fi
+exit 0
