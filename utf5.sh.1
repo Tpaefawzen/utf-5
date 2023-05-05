@@ -1,0 +1,33 @@
+.Dd May 1, 2023
+.Dt UTF5.SH 1
+.Os
+.Sh NAME
+.Nm utf5.sh
+.Nd Convert UTF-8 to UTF-5
+.Sh SYNOPSIS
+.Nm
+.Ar FILE
+.Sh DESCRIPTION
+The shell script
+.Nm
+accepts legally encoded UTF-8 text to convert to UTF-5.
+The program denies surrogate pairs, BOM characters, and characters
+more than U+10FFFF.
+.Pp
+This program outputs one line of UTF-5 text with terminating linefeed;
+use
+.Xr fold 1
+to fold into several lines.
+.Sh EXIT STATUS
+.Ex -std
+The errors are: 
+.Bl -bullet
+.It
+The input file is not a readable regular file.
+.It
+The input has any subsequence that is not a valid UTF-8.
+.El
+.Sh SEE ALSO
+What?
+.Sh AUTHOR
+Tpaefawzen
