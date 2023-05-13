@@ -1,8 +1,27 @@
-#!/bin/sh
-
+changequote(<<<, >>>)dnl
+dnl
+dnl @string BOILERPLATE()
+dnl initializes shellscript for portability as in POSIXism
+dnl 
+define(<<<BOILERPLATE>>>,
+<<<## boilerplate
+set -eu
+umask 0022
+if posix_path="$( comamnd -p getconf PATH 2>/dev/null )"; then
+    export PATH="${posix_path}${PATH+:}${PATH:-}"
+fi
+export LC_ALL=C
+export UNIX_STD=2003
+export POSIXLY_CORRECT=1>>>)dnl
+dnl
+dnl @macro HEADER()
+dnl @param NAME, DESCRIPTION
+dnl sets header block of comments. Has command NAME, its DESCRIPTION, my copyright notice, license things.
+dnl
+define(<<<HEADER>>>, <<<dnl
 ################################################################################
 #
-# utf5.sh - Convert UTF-8 text to UTF-8
+# $1 - $2
 #
 # Copyright (C) 2023 Tpaefawzen <GitHub: Tpaefawzen>
 #
@@ -31,16 +50,18 @@
 # SOFTWARE.
 #
 ################################################################################
+>>>)dnl
+dnl
+dnl ## end of macros
+dnl
+<<<#!/bin/sh
 
-## boilerplate
-set -eu
-umask 0022
-if posix_path="$( comamnd -p getconf PATH 2>/dev/null )"; then
-    export PATH="${posix_path}${PATH+:}${PATH:-}"
-fi
-export LC_ALL=C
-export UNIX_STD=2003
-export POSIXLY_CORRECT=1
+>>>HEADER(
+	<<<convfu5.sh>>>,
+	<<<Convert UTF-5 text to UTF-8>>>dnl
+)<<<
+
+>>>BOILERPLATE()<<<
 
 ## pipestatus alternative
 ## shall have at least one line of text when error; empty if succesuful exit
@@ -67,6 +88,10 @@ usage(){
 	exit 1
 }
 
+## flags for this command
+is_case_sensitive=1 # -c OR --case-insensitive
+is_need2rm_blank=0 # -b OR --remove-blanks
+
 ## parse arguments
 case "${1:-}" in (-h|--help|--usage)
 	usage
@@ -74,13 +99,47 @@ esac
 
 ## main routine
 
-# assuming input is UTF-8, get each byte as unsigned decimal
+# assuming input is UTF-5 in ASCII, get each byte as unsigned decimal
 (
-	od -A n -t u1 -v ${1:+"$1"} || {
+	cat ${1:+"$1"} || {
 		printf '%s\n' "${0##*/}: ${1##*/}: Reading error occured (status: $?)" 1>&2
 		echo 1 >> "$ERRSTATUS"
 	}
 ) |
+#
+# to uppercase if requested
+case $is_case_sensitive in 0) tr a-z A-Z;; *) cat;; esac |
+#
+# remove blank things if requested
+case $is_need2rm_blank in 0) cat;; *) tr -sd ' \t';; esac |
+#
+# are they utf-5 letters?
+# if so convert each letter to code point
+# otherwise fail
+awk -v myname="${0##*/}" -v ERRSTATUS="$ERRSTATUS" -v is_reading=0 '
+BEGIN {
+	# 00000-01001 to 0-9
+	for ( i = 0; i < 10; i++ ){
+		d["" i] = i;
+	}
+
+	# 01010-11111 to A-V
+	for ( i = 10; i < 32; i++ ){
+		d[sprintf("%c", 55 + i)] = i;
+	}
+}
+{
+	L = length($0);
+	for ( i = 1; i <= L; i++ ){
+		c = substr($0, i, 1);
+		if ( c in d ){
+			print d[c];
+			continue;
+		}
+		error_exit( "unknown character " c );
+	}
+}' |
+cat;exit
 #
 # convert to code points
 awk -v myname="${0##*/}" -v ERRSTATUS="$ERRSTATUS" -v is_reading=0 '
@@ -210,4 +269,4 @@ END{
 if test -r "$ERRSTATUS"; then
 	exit $( head -n 1 "$ERRSTATUS" )
 fi
-exit 0
+exit 0>>>
