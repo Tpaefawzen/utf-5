@@ -52,6 +52,19 @@ define(<<<HEADER>>>, <<<dnl
 ################################################################################
 >>>)dnl
 dnl
+dnl @macro DEFINE_AWK_ERROR_EXIXT
+dnl @param none
+dnl @depends @variable myname
+dnl @depends @variable ERRSTATUS
+dnl @descrpiton
+dnl Awk's user-defined internal function.
+define(<<<DEFINE_AWK_ERROR_EXIT>>>,<<<dnl
+function error_exit( msg ){
+	print myname ": " msg | "cat 1>&2";
+	print 1 >> ERRSTATUS;
+	exit( 1 );
+}>>>)dnl
+dnl
 dnl ## end of macros
 dnl
 <<<#!/bin/sh
@@ -97,6 +110,36 @@ case "${1:-}" in (-h|--help|--usage)
 	usage
 esac
 
+while :; do
+	# no args
+	case "$#" in 0) break;; esac
+
+	# no flags
+	# NAME ''
+	# NAME -
+	# NAME FILE
+	case "$1" in ''|-|[!-]*) break;; esac
+
+	# end of flags
+	case "$1" in --) shift; break;; esac
+
+	# flags #
+	case "$1" in
+	-c|--case-insensitive|--c*)
+		is_case_sensitive=0
+		shift
+		continue
+	;;
+	-b|--remove-blanks|--r*)
+		is_need2rm_blank=1
+		shift
+		continue
+	;;esac
+
+	# now unsupported flags
+	usage
+done
+
 ## main routine
 
 # assuming input is UTF-5 in ASCII, get each byte as unsigned decimal
@@ -111,12 +154,14 @@ esac
 case $is_case_sensitive in 0) tr a-z A-Z;; *) cat;; esac |
 #
 # remove blank things if requested
-case $is_need2rm_blank in 0) cat;; *) tr -sd ' \t';; esac |
+case $is_need2rm_blank in 0) cat;; *) tr -d ' \t';; esac |
 #
 # are they utf-5 letters?
 # if so convert each letter to code point
 # otherwise fail
 awk -v myname="${0##*/}" -v ERRSTATUS="$ERRSTATUS" -v is_reading=0 '
+>>>DEFINE_AWK_ERROR_EXIT<<<
+
 BEGIN {
 	# 00000-01001 to 0-9
 	for ( i = 0; i < 10; i++ ){
@@ -139,7 +184,45 @@ BEGIN {
 		error_exit( "unknown character " c );
 	}
 }' |
-cat;exit
+#
+# 1: quintet
+# now group by sequence
+# grouped by 1xxxx [0xxxx ...]
+awk -v myname="${0##*/}" -v ERRSTATUS="$ERRSTATUS" -v is_error=0 '
+>>>DEFINE_AWK_ERROR_EXIT<<<
+
+BEGIN{
+	row = "";
+}
+$1 >= 16 {
+	if (row) print row;
+	row = $1;
+	next;
+}
+0 <= $1 && $1 < 16 {
+	row = row FS $1;
+
+	if (NR != 1) next;
+	is_error = 1;
+	error_exit("first 0xxxx quintet is illegal: " $1);	
+}
+END {
+	if ( ! is_error && row ) print row;
+}' |
+#
+# 1-NF: quintets
+# convert quintets to code point
+awk '
+{
+	val = $1 - 16;
+	for ( i = 2; i <= NF; i++ ){
+		val = val * 16 + $i;
+	}
+	print val;
+}' |
+#
+# 1: code point
+cat;exit;
 #
 # convert to code points
 awk -v myname="${0##*/}" -v ERRSTATUS="$ERRSTATUS" -v is_reading=0 '
@@ -263,7 +346,9 @@ END{
 	if( NR >= 1 ){
 		printf ORS;
 	}
-}'
+}' |
+#
+# to
 
 # finally
 if test -r "$ERRSTATUS"; then
